@@ -1,0 +1,90 @@
+version: "3.9"
+
+services:
+  sales-mcp:
+    image: maven:3.9.11-eclipse-temurin-25
+    container_name: sales-mcp
+    ports:
+      - "8084:8084"
+    working_dir: /app
+    command:
+      - bash
+      - -lc
+      - >
+        apt-get update &&
+        apt-get install -y git &&
+        mkdir -p /app/repo &&
+        if [ ! -d /app/repo/.git ]; then
+          git clone https://github.com/dmarcosl/spring-ai-mcp-salesmcp /app/repo;
+        else
+          cd /app/repo && git pull;
+        fi &&
+        cd /app/repo &&
+        mvn -q -DskipTests clean package &&
+        java -jar target/salesmcp-0.0.1-SNAPSHOT.jar
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8084'"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+    restart: unless-stopped
+
+  stock-mcp:
+    image: maven:3.9.11-eclipse-temurin-25
+    container_name: stock-mcp
+    ports:
+      - "8085:8085"
+    working_dir: /app
+    command:
+      - bash
+      - -lc
+      - >
+        apt-get update &&
+        apt-get install -y git &&
+        mkdir -p /app/repo &&
+        if [ ! -d /app/repo/.git ]; then
+          git clone https://github.com/dmarcosl/spring-ai-mcp-stockmcp /app/repo;
+        else
+          cd /app/repo && git pull;
+        fi &&
+        cd /app/repo &&
+        mvn -q -DskipTests clean package &&
+        java -jar target/stockmcp-0.0.1-SNAPSHOT.jar
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8085'"]
+      interval: 3s
+      timeout: 2s
+      retries: 40
+    restart: unless-stopped
+
+  agent:
+    image: maven:3.9.11-eclipse-temurin-25
+    container_name: mcp-agent
+    ports:
+      - "8086:8086"
+    env_file:
+      - .env
+#    environment:
+#      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    working_dir: /app
+    command:
+      - bash
+      - -lc
+      - >
+        apt-get update &&
+        apt-get install -y git &&
+        mkdir -p /app/repo &&
+        if [ ! -d /app/repo/.git ]; then
+          git clone https://github.com/dmarcosl/spring-ai-mcp-agent /app/repo;
+        else
+          cd /app/repo && git pull;
+        fi &&
+        cd /app/repo &&
+        mvn -q -DskipTests clean package &&
+        java -jar target/agent-0.0.1-SNAPSHOT.jar
+    depends_on:
+      sales-mcp:
+        condition: service_healthy
+      stock-mcp:
+        condition: service_healthy
+    restart: unless-stopped
