@@ -57,15 +57,13 @@ services:
       retries: 40
     restart: unless-stopped
 
-  agent:
+  mcp-agent:
     image: maven:3.9.11-eclipse-temurin-25
     container_name: mcp-agent
     ports:
       - "8086:8086"
     env_file:
       - .env
-#    environment:
-#      OPENAI_API_KEY: ${OPENAI_API_KEY}
     working_dir: /app
     command:
       - bash
@@ -87,4 +85,33 @@ services:
         condition: service_healthy
       stock-mcp:
         condition: service_healthy
+    restart: unless-stopped
+
+  front:
+    image: node:22-alpine
+    container_name: front
+    ports:
+      - "80:80"
+    working_dir: /app
+    command:
+      - sh
+      - -c
+      - >
+        set -e &&
+        apk add --no-cache git nginx &&
+        mkdir -p /app/repo &&
+        if [ ! -d /app/repo/.git ]; then
+          git clone https://github.com/dmarcosl/ai-mcp-front /app/repo;
+        else
+          cd /app/repo && git pull;
+        fi &&
+        cd /app/repo &&
+        npm install &&
+        npm run build -- --configuration=production &&
+        mkdir -p /usr/share/nginx/html &&
+        cp -r dist/ai-mcp-front/browser/* /usr/share/nginx/html/ &&
+        mkdir -p /etc/nginx/http.d &&
+        cp nginx.conf /etc/nginx/http.d/default.conf &&
+        nginx -t &&
+        nginx -g 'daemon off;'
     restart: unless-stopped
